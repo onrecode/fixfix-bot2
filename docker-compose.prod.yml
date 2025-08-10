@@ -1,0 +1,89 @@
+version: '3.8'
+
+services:
+  # PostgreSQL база данных
+  postgres:
+    image: postgres:15-alpine
+    container_name: fixfix_postgres
+    environment:
+      POSTGRES_DB: ${DB_NAME:-fixfix_bot}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backups:/backups
+    ports:
+      - "127.0.0.1:5432:5432"  # Только локальный доступ
+    networks:
+      - fixfix_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    # Оптимизация для малых нагрузок
+    command: >
+      postgres
+      -c shared_buffers=256MB
+      -c effective_cache_size=1GB
+      -c maintenance_work_mem=64MB
+      -c checkpoint_completion_target=0.9
+      -c wal_buffers=16MB
+      -c default_statistics_target=100
+
+  # Основное приложение (API + Bot в одном контейнере)
+  app:
+    build: .
+    container_name: fixfix_app
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME:-fixfix_bot}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-password}
+      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
+      - REQUESTS_GROUP_ID=${REQUESTS_GROUP_ID:-1004796553922}
+      - ADMIN_IDS=${ADMIN_IDS:-}
+      - DEBUG=${DEBUG:-false}
+      - API_BASE_URL=http://localhost:8000
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - fixfix_network
+    volumes:
+      - ./logs:/app/logs
+    restart: unless-stopped
+    # Запускаем и API, и бота
+    command: >
+      sh -c "
+        python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 &
+        python main.py &
+        wait
+      "
+
+  # Nginx для проксирования (упрощенная версия)
+  nginx:
+    image: nginx:alpine
+    container_name: fixfix_nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - app
+    networks:
+      - fixfix_network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+
+networks:
+  fixfix_network:
+    driver: bridge
