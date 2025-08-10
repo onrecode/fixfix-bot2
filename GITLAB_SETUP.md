@@ -14,7 +14,7 @@
 2. Нажмите "New Project"
 3. Выберите "Create blank project"
 4. Заполните поля:
-   - **Project name**: `fixfix-bot`
+   - **Project name**: `fx-bot`
    - **Visibility Level**: `Private` (рекомендуется)
    - **Initialize repository with**: оставьте пустым
 
