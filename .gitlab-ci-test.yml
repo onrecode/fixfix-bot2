@@ -1,0 +1,22 @@
+stages:
+  - test
+
+# Простой тест для проверки runner'а
+test-runner:
+  stage: test
+  tags:
+    - docker
+    - linux
+  script:
+    - echo "🚀 GitLab Runner работает корректно!"
+    - echo "📅 Дата и время: $(date)"
+    - echo "🐧 Операционная система: $(uname -a)"
+    - echo "🐳 Docker версия: $(docker --version)"
+    - echo "📦 Python версия: $(python --version 2>/dev/null || echo 'Python не установлен')"
+    - echo "🔧 Git версия: $(git --version)"
+    - echo "📁 Текущая директория: $(pwd)"
+    - echo "👤 Пользователь: $(whoami)"
+    - echo "✅ Все проверки пройдены успешно!"
+  only:
+    - main
+    - merge_requests

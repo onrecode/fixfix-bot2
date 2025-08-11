@@ -94,7 +94,54 @@ cd /opt/fixfix-bot
 exit
 ```
 
-### 5. Клонирование проекта
+### 5. Настройка собственного GitLab Runner
+
+#### **Важно**: Мы используем собственный GitLab Runner вместо общих исполнителей GitLab для безопасности и контроля.
+
+#### **На сервере развертывания:**
+
+```bash
+# Подключаемся к серверу
+ssh deploy@YOUR_SERVER_IP
+
+# Устанавливаем GitLab Runner
+curl -L "https://packages.gitlab.com/install/repositories/runner/gitlab-runner/script.deb.sh" | sudo bash
+sudo apt-get install gitlab-runner
+
+# Регистрируем runner
+sudo gitlab-runner register
+
+# При регистрации введите:
+# GitLab instance URL: https://gitlab.com (или ваш GitLab)
+# Registration token: (получите из Settings > CI/CD > Runners)
+# Description: fixfix-bot-runner
+# Tags: docker,linux
+# Executor: docker
+# Default image: alpine:latest
+# Docker image: alpine:latest
+
+# Проверяем статус runner'а
+sudo gitlab-runner status
+
+# Убеждаемся, что runner активен в GitLab
+# Settings > CI/CD > Runners должен показывать активный runner
+```
+
+#### **Настройка Docker executor:**
+
+```bash
+# Редактируем конфигурацию runner'а
+sudo nano /etc/gitlab-runner/config.toml
+
+# Добавляем в секцию [runners.docker]:
+# privileged = true
+# volumes = ["/var/run/docker.sock:/var/run/docker.sock", "/cache"]
+
+# Перезапускаем runner
+sudo gitlab-runner restart
+```
+
+### 6. Клонирование проекта
 
 ```bash
 # Клонируем проект на сервер
@@ -103,7 +150,7 @@ cd /opt/fixfix-bot
 git clone https://gitlab.com/YOUR_USERNAME/fixfix-bot.git .
 ```
 
-### 6. Настройка переменных в GitLab
+### 7. Настройка переменных в GitLab
 
 В GitLab проекте перейдите в **Settings > CI/CD > Variables**:
 
@@ -135,7 +182,7 @@ git clone https://gitlab.com/YOUR_USERNAME/fixfix-bot.git .
 - **Protected**: ✅
 - **Masked**: ❌
 
-### 7. Первый запуск CI/CD
+### 8. Первый запуск CI/CD
 
 1. **Закоммитьте и запушьте** все файлы в GitLab
 2. Перейдите в **CI/CD > Pipelines**
