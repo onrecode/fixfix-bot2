@@ -1,0 +1,28 @@
+name: Test Runner
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  test-runner:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Test GitHub Actions Runner
+        run: |
+          echo "🚀 GitHub Actions Runner работает корректно!"
+          echo "📅 Дата и время: $(date)"
+          echo "🐧 Операционная система: $(uname -a)"
+          echo "📦 Python версия: $(python --version)"
+          echo "🔧 Git версия: $(git --version)"
+          echo "📁 Текущая директория: $(pwd)"
+          echo "👤 Пользователь: $(whoami)"
+          echo "✅ Все проверки пройдены успешно!"
+
+      - name: Run Python Tests
+        run: |
+          python test_github_actions.py
