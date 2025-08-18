@@ -99,16 +99,16 @@ jobs:
               echo "📝 Creating .env file..."
               cat > .env << 'ENV_EOF'
             # Telegram Bot
-            TELEGRAM_TOKEN=7685745030:AAEkaAAC3SUbMCoJOKhq5zzsDpYsXRRIPQ4
-            REQUESTS_GROUP_ID=-1004796553922
-            ADMIN_IDS=1284426123
+            TELEGRAM_TOKEN=${{ secrets.TELEGRAM_TOKEN }}
+            REQUESTS_GROUP_ID=${{ secrets.REQUESTS_GROUP_ID }}
+            ADMIN_IDS=${{ secrets.ADMIN_IDS }}
             
             # Database
             DB_HOST=postgres
             DB_PORT=5432
             DB_NAME=fixfix_bot
             DB_USER=postgres
-            DB_PASSWORD=password
+            DB_PASSWORD=${{ secrets.DB_PASSWORD }}
             
             # API
             API_HOST=0.0.0.0
