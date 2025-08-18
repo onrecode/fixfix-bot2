@@ -81,6 +81,42 @@ jobs:
           script: |
             echo "🚀 Starting deployment..."
             
+            # Создаем директорию если её нет
+            mkdir -p /opt/fixfix-bot
+            cd /opt/fixfix-bot
+            
+            # Клонируем или обновляем репозиторий
+            if [ ! -d ".git" ]; then
+              echo "📥 Cloning repository..."
+              git clone https://github.com/onrecode/fixfix-bot2.git .
+            else
+              echo "🔄 Updating repository..."
+              git pull origin main
+            fi
+            
+            # Создаем .env файл если его нет
+            if [ ! -f ".env" ]; then
+              echo "📝 Creating .env file..."
+              cat > .env << 'ENV_EOF'
+            # Telegram Bot
+            TELEGRAM_TOKEN=7685745030:AAEkaAAC3SUbMCoJOKhq5zzsDpYsXRRIPQ4
+            REQUESTS_GROUP_ID=-1004796553922
+            ADMIN_IDS=1284426123
+            
+            # Database
+            DB_HOST=postgres
+            DB_PORT=5432
+            DB_NAME=fixfix_bot
+            DB_USER=postgres
+            DB_PASSWORD=password
+            
+            # API
+            API_HOST=0.0.0.0
+            API_PORT=8000
+            API_DEBUG=false
+            ENV_EOF
+            fi
+            
             # Pull latest image
             docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
             
