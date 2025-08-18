@@ -40,7 +40,17 @@ class TelegramSettings(BaseSettings):
         print(f"  REQUESTS_GROUP_ID: {os.getenv('REQUESTS_GROUP_ID', 'NOT_SET')}")
         print(f"  ADMIN_IDS: {os.getenv('ADMIN_IDS', 'NOT_SET')}")
         
-        super().__init__(**kwargs)
+        # Передаем переменные окружения напрямую
+        env_data = {
+            "token": os.getenv("TELEGRAM_TOKEN"),
+            "requests_group_id": os.getenv("REQUESTS_GROUP_ID", "-1004796553922"),
+            "admin_ids": os.getenv("ADMIN_IDS", "")
+        }
+        
+        # Объединяем с переданными kwargs
+        env_data.update(kwargs)
+        
+        super().__init__(**env_data)
         # Парсим admin_ids из строки
         if isinstance(self.admin_ids, str) and self.admin_ids:
             self.admin_ids = [int(id.strip()) for id in self.admin_ids.split(",") if id.strip()]
