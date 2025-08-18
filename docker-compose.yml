@@ -42,16 +42,11 @@ services:
     # Для продакшена можно использовать конкретный тег:
     # image: ghcr.io/onrecode/fixfix-bot2:${IMAGE_TAG:-latest}
     container_name: fixfix_app
+    env_file:
+      - .env
     environment:
       - DB_HOST=postgres
       - DB_PORT=5432
-      - DB_NAME=${DB_NAME:-fixfix_bot}
-      - DB_USER=${DB_USER:-postgres}
-      - DB_PASSWORD=${DB_PASSWORD:-password}
-      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
-      - REQUESTS_GROUP_ID=${REQUESTS_GROUP_ID:-1004796553922}
-      - ADMIN_IDS=${ADMIN_IDS:-}
-      - DEBUG=${DEBUG:-false}
     ports:
       - "8000:8000"
     depends_on:
@@ -124,16 +119,11 @@ services:
     # Для продакшена можно использовать конкретный тег:
     # image: ghcr.io/onrecode/fixfix-bot2:${IMAGE_TAG:-latest}
     container_name: fixfix_bot
+    env_file:
+      - .env
     environment:
       - DB_HOST=postgres
       - DB_PORT=5432
-      - DB_NAME=${DB_NAME:-fixfix_bot}
-      - DB_USER=${DB_USER:-postgres}
-      - DB_PASSWORD=${DB_PASSWORD:-password}
-      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
-      - REQUESTS_GROUP_ID=${REQUESTS_GROUP_ID:-1004796553922}
-      - ADMIN_IDS=${ADMIN_IDS:-}
-      - DEBUG=${DEBUG:-false}
     depends_on:
       postgres:
         condition: service_healthy

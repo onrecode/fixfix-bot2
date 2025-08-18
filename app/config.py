@@ -1,6 +1,7 @@
 """
 Конфигурация приложения FixFix Bot
 """
+import os
 from typing import List, Optional
 from pydantic_settings import BaseSettings
 from pydantic import Field
@@ -32,6 +33,13 @@ class TelegramSettings(BaseSettings):
         env_file = ".env"
     
     def __init__(self, **kwargs):
+        # Отладочная информация
+        print(f"DEBUG: TelegramSettings.__init__ called")
+        print(f"DEBUG: Environment variables:")
+        print(f"  TELEGRAM_TOKEN: {os.getenv('TELEGRAM_TOKEN', 'NOT_SET')}")
+        print(f"  REQUESTS_GROUP_ID: {os.getenv('REQUESTS_GROUP_ID', 'NOT_SET')}")
+        print(f"  ADMIN_IDS: {os.getenv('ADMIN_IDS', 'NOT_SET')}")
+        
         super().__init__(**kwargs)
         # Парсим admin_ids из строки
         if isinstance(self.admin_ids, str) and self.admin_ids:
@@ -68,11 +76,22 @@ class Settings(BaseSettings):
         env_file = ".env"
     
     def __init__(self, **kwargs):
+        print(f"DEBUG: Settings.__init__ called")
         super().__init__(**kwargs)
         # Инициализируем telegram settings после загрузки переменных окружения
         if self.telegram is None:
-            self.telegram = TelegramSettings()
+            try:
+                self.telegram = TelegramSettings()
+                print(f"DEBUG: TelegramSettings created successfully")
+            except Exception as e:
+                print(f"ERROR: Failed to create TelegramSettings: {e}")
+                raise
 
 
 # Глобальный экземпляр настроек
-settings = Settings()
+try:
+    settings = Settings()
+    print(f"DEBUG: Settings created successfully")
+except Exception as e:
+    print(f"ERROR: Failed to create Settings: {e}")
+    raise
