@@ -35,22 +35,24 @@ structlog.configure(
 logger = structlog.get_logger()
 
 
-async def wait_for_database(max_retries: int = 30, delay: float = 2.0):
+async def wait_for_database(max_retries: int = 60, delay: float = 3.0):
     """Ожидание готовности базы данных"""
     logger.info("Ожидание готовности базы данных...")
     
     for attempt in range(max_retries):
         try:
+            logger.info(f"Попытка подключения к БД {attempt + 1}/{max_retries}")
             if await check_db_connection():
-                logger.info(f"База данных готова (попытка {attempt + 1})")
+                logger.info(f"✅ База данных готова (попытка {attempt + 1})")
                 return True
         except Exception as e:
             logger.warning(f"Попытка {attempt + 1}/{max_retries}: БД не готова: {e}")
         
         if attempt < max_retries - 1:
+            logger.info(f"Ожидание {delay} секунд перед следующей попыткой...")
             await asyncio.sleep(delay)
     
-    logger.error("База данных не готова после всех попыток")
+    logger.error("❌ База данных не готова после всех попыток")
     return False
 
 

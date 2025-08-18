@@ -50,9 +50,13 @@ async def close_db():
 async def check_db_connection() -> bool:
     """Проверка подключения к базе данных"""
     try:
+        print(f"DEBUG: Проверка подключения к БД: {settings.database.url}")
         async with engine.begin() as conn:
-            await conn.execute("SELECT 1")
+            result = await conn.execute("SELECT 1")
+            print(f"DEBUG: Результат запроса: {result}")
+        print("DEBUG: Подключение к БД успешно!")
         return True
     except Exception as e:
-        print(f"Ошибка подключения к БД: {e}")
+        print(f"DEBUG: Ошибка подключения к БД: {e}")
+        print(f"DEBUG: Тип ошибки: {type(e)}")
         return False
