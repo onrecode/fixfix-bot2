@@ -17,6 +17,16 @@ class DatabaseSettings(BaseSettings):
     pool_size: int = Field(default=10, env="DB_POOL_SIZE")
     max_overflow: int = Field(default=20, env="DB_MAX_OVERFLOW")
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        print(f"DEBUG: DatabaseSettings initialized:")
+        print(f"  host: {self.host}")
+        print(f"  port: {self.port}")
+        print(f"  name: {self.name}")
+        print(f"  user: {self.user}")
+        print(f"  password: {'*' * len(self.password) if self.password else 'NOT_SET'}")
+        print(f"  URL: {self.url}")
+
     @property
     def url(self) -> str:
         """URL для подключения к базе данных"""
