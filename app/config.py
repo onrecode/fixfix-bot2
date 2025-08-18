@@ -1,7 +1,7 @@
 """
 Конфигурация приложения FixFix Bot
 """
-from typing import List
+from typing import List, Optional
 from pydantic_settings import BaseSettings
 from pydantic import Field
 
@@ -56,7 +56,7 @@ class MonitoringSettings(BaseSettings):
 class Settings(BaseSettings):
     """Основные настройки приложения"""
     database: DatabaseSettings = DatabaseSettings()
-    telegram: TelegramSettings = TelegramSettings()
+    telegram: Optional[TelegramSettings] = None
     api: APISettings = APISettings()
     monitoring: MonitoringSettings = MonitoringSettings()
     
@@ -66,6 +66,12 @@ class Settings(BaseSettings):
     
     class Config:
         env_file = ".env"
+    
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # Инициализируем telegram settings после загрузки переменных окружения
+        if self.telegram is None:
+            self.telegram = TelegramSettings()
 
 
 # Глобальный экземпляр настроек
