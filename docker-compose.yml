@@ -38,7 +38,7 @@ services:
 
   # Основное приложение
   app:
-    build: .
+    image: ghcr.io/onrecode/fixfix-bot2:latest
     container_name: fixfix_app
     environment:
       - DB_HOST=postgres
@@ -118,7 +118,7 @@ services:
 
   # Telegram Bot (отдельный сервис)
   bot:
-    build: .
+    image: ghcr.io/onrecode/fixfix-bot2:latest
     container_name: fixfix_bot
     environment:
       - DB_HOST=postgres
