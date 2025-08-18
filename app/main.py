@@ -1,6 +1,7 @@
 """
 Основное FastAPI приложение для FixFix Bot
 """
+import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,7 +10,7 @@ import structlog
 import time
 
 from app.config import settings
-from app.database.connection import init_db, close_db
+from app.database.connection import init_db, close_db, check_db_connection
 from app.api.requests import router as requests_router
 
 # Настройка логирования
@@ -34,11 +35,35 @@ structlog.configure(
 logger = structlog.get_logger()
 
 
+async def wait_for_database(max_retries: int = 30, delay: float = 2.0):
+    """Ожидание готовности базы данных"""
+    logger.info("Ожидание готовности базы данных...")
+    
+    for attempt in range(max_retries):
+        try:
+            if await check_db_connection():
+                logger.info(f"База данных готова (попытка {attempt + 1})")
+                return True
+        except Exception as e:
+            logger.warning(f"Попытка {attempt + 1}/{max_retries}: БД не готова: {e}")
+        
+        if attempt < max_retries - 1:
+            await asyncio.sleep(delay)
+    
+    logger.error("База данных не готова после всех попыток")
+    return False
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Управление жизненным циклом приложения"""
     # Запуск
     logger.info("Запуск приложения FixFix Bot")
+    
+    # Ожидание готовности базы данных
+    if not await wait_for_database():
+        logger.error("Не удалось подключиться к базе данных")
+        raise RuntimeError("База данных недоступна")
     
     # Инициализация базы данных
     try:
@@ -128,8 +153,10 @@ app.include_router(requests_router, prefix="/api/v1")
 @app.get("/health")
 async def health_check():
     """Проверка состояния приложения"""
+    db_status = await check_db_connection()
     return {
-        "status": "healthy",
+        "status": "healthy" if db_status else "unhealthy",
+        "database": "connected" if db_status else "disconnected",
         "timestamp": time.time(),
         "version": "1.0.0"
     }
