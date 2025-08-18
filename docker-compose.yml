@@ -39,6 +39,8 @@ services:
   # Основное приложение
   app:
     image: ghcr.io/onrecode/fixfix-bot2:latest
+    # Для продакшена можно использовать конкретный тег:
+    # image: ghcr.io/onrecode/fixfix-bot2:${IMAGE_TAG:-latest}
     container_name: fixfix_app
     environment:
       - DB_HOST=postgres
@@ -119,6 +121,8 @@ services:
   # Telegram Bot (отдельный сервис)
   bot:
     image: ghcr.io/onrecode/fixfix-bot2:latest
+    # Для продакшена можно использовать конкретный тег:
+    # image: ghcr.io/onrecode/fixfix-bot2:${IMAGE_TAG:-latest}
     container_name: fixfix_bot
     environment:
       - DB_HOST=postgres
