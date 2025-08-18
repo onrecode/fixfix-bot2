@@ -80,24 +80,23 @@ jobs:
           key: ${{ secrets.PROD_SSH_KEY }}
           script: |
             echo "🚀 Starting deployment..."
+            echo "📅 Deployment time: $(date)"
+            echo "🐧 System info: $(uname -a)"
+            echo "🐳 Docker version: $(docker --version)"
+            echo "📦 Docker Compose version: $(docker-compose --version)"
             
             # Создаем директорию если её нет
             mkdir -p /opt/fixfix-bot
             cd /opt/fixfix-bot
+            echo "📁 Working directory: $(pwd)"
             
-            # Клонируем или обновляем репозиторий
-            if [ ! -d ".git" ]; then
-              echo "📥 Cloning repository..."
-              git clone https://github.com/onrecode/fixfix-bot2.git .
-            else
-              echo "🔄 Updating repository..."
-              git pull origin main
-            fi
+            # Check existing files
+            echo "📋 Existing files:"
+            ls -la || echo "Directory is empty"
             
-            # Создаем .env файл если его нет
-            if [ ! -f ".env" ]; then
-              echo "📝 Creating .env file..."
-              cat > .env << 'ENV_EOF'
+            # Создаем .env файл
+            echo "📝 Creating .env file..."
+            cat > .env << 'ENV_EOF'
             # Telegram Bot
             TELEGRAM_TOKEN=${{ secrets.TELEGRAM_TOKEN }}
             REQUESTS_GROUP_ID=${{ secrets.REQUESTS_GROUP_ID }}
@@ -115,7 +114,60 @@ jobs:
             API_PORT=8000
             API_DEBUG=false
             ENV_EOF
-            fi
+            
+            # Создаем docker-compose.yml
+            echo "📝 Creating docker-compose.yml..."
+            cat > docker-compose.yml << 'COMPOSE_EOF'
+            version: '3.8'
+            
+            services:
+              # PostgreSQL база данных
+              postgres:
+                image: postgres:15-alpine
+                container_name: fixfix_postgres
+                environment:
+                  POSTGRES_DB: ${DB_NAME:-fixfix_bot}
+                  POSTGRES_USER: ${DB_USER:-postgres}
+                  POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
+                volumes:
+                  - postgres_data:/var/lib/postgresql/data
+                ports:
+                  - "127.0.0.1:5432:5432"
+                networks:
+                  - fixfix_network
+                restart: unless-stopped
+            
+              # Основное приложение (API + Bot)
+              app:
+                image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+                container_name: fixfix_app
+                environment:
+                  - DB_HOST=postgres
+                  - DB_PORT=5432
+                  - DB_NAME=${DB_NAME:-fixfix_bot}
+                  - DB_USER=${DB_USER:-postgres}
+                  - DB_PASSWORD=${DB_PASSWORD:-password}
+                  - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
+                  - REQUESTS_GROUP_ID=${REQUESTS_GROUP_ID:-1004796553922}
+                  - ADMIN_IDS=${ADMIN_IDS:-}
+                  - DEBUG=${DEBUG:-false}
+                ports:
+                  - "8000:8000"
+                depends_on:
+                  - postgres
+                networks:
+                  - fixfix_network
+                volumes:
+                  - ./logs:/app/logs
+                restart: unless-stopped
+            
+            volumes:
+              postgres_data:
+            
+            networks:
+              fixfix_network:
+                driver: bridge
+            COMPOSE_EOF
             
             # Pull latest image
             docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
@@ -130,3 +182,29 @@ jobs:
             
             # Show running containers
             docker ps
+            
+            # Show logs for debugging
+            echo "📋 Checking container logs..."
+            echo "=== PostgreSQL logs ==="
+            docker logs fixfix_postgres --tail=10 || echo "PostgreSQL container not found"
+            
+            echo "=== App logs ==="
+            docker logs fixfix_app --tail=20 || echo "App container not found"
+            
+            echo "=== Docker Compose status ==="
+            docker-compose ps
+            
+            echo "=== Environment check ==="
+            echo "DB_HOST: $DB_HOST"
+            echo "DB_PORT: $DB_PORT"
+            echo "TELEGRAM_TOKEN: ${TELEGRAM_TOKEN:0:10}..." # Показываем только начало токена
+            
+            echo "=== File check ==="
+            ls -la
+            echo "=== .env content (without secrets) ==="
+            cat .env | grep -v TOKEN | grep -v PASSWORD
+            
+            echo "=== Docker Compose config ==="
+            docker-compose config
+            
+            echo "✅ Deployment completed successfully!"
