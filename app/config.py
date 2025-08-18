@@ -26,7 +26,7 @@ class TelegramSettings(BaseSettings):
     """Настройки Telegram бота"""
     token: str = Field(..., env="TELEGRAM_TOKEN")
     requests_group_id: int = Field(default=-1004796553922, env="REQUESTS_GROUP_ID")
-    admin_ids: List[int] = Field(default=[], env="ADMIN_IDS")
+    admin_ids: str = Field(default="", env="ADMIN_IDS")
     
     class Config:
         env_file = ".env"
@@ -34,8 +34,10 @@ class TelegramSettings(BaseSettings):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         # Парсим admin_ids из строки
-        if isinstance(self.admin_ids, str):
+        if isinstance(self.admin_ids, str) and self.admin_ids:
             self.admin_ids = [int(id.strip()) for id in self.admin_ids.split(",") if id.strip()]
+        else:
+            self.admin_ids = []
 
 
 class APISettings(BaseSettings):
