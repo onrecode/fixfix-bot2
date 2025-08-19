@@ -535,21 +535,61 @@ async def confirm_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             del user_requests[user_id]
             
         except ValueError as e:
-            # Ошибка валидации API
-            await safe_send_message(update, context,
-                f"❌ Ошибка валидации данных: {str(e)}\n"
-                "Пожалуйста, исправьте данные и попробуйте снова.",
-                reply_markup=back_menu()
-            )
+            # Ошибка валидации API – оформляем заявку как "fallback" без БД, чтобы не потерять клиента
+            try:
+                request = user_requests[user_id]
+                request["status"] = "новая (fallback)"
+                request["updated_at"] = datetime.now().isoformat()
+                await send_request_to_channel(request, context)
+                await safe_send_message(update, context,
+                    "✅ Заявка принята!\n"
+                    "Наш менеджер свяжется с вами в ближайшее время.\n"
+                    "Примечание: были проблемы с обработкой данных, но мы уже получили вашу заявку.",
+                    reply_markup=main_menu()
+                )
+                # Уведомим админов о причине
+                for admin_id in ADMIN_IDS:
+                    try:
+                        await context.bot.send_message(admin_id, f"⚠️ Fallback-заявка: ошибка валидации API: {e}")
+                    except Exception:
+                        pass
+                del user_requests[user_id]
+            except Exception as inner_e:
+                print(f"Fallback error (validation): {inner_e}")
+                await safe_send_message(update, context,
+                    f"❌ Ошибка валидации данных: {str(e)}\n"
+                    "Пожалуйста, исправьте данные и попробуйте снова.",
+                    reply_markup=back_menu()
+                )
             print(f"Ошибка валидации API: {e}")
             
         except Exception as e:
-            # Общая ошибка
-            await safe_send_message(update, context,
-                "⚠️ Произошла ошибка при создании заявки.\n"
-                "Пожалуйста, попробуйте позже или свяжитесь с поддержкой.",
-                reply_markup=main_menu()
-            )
+            # Общая ошибка – оформляем заявку в канал, чтобы не потерять клиента
+            try:
+                request = user_requests[user_id]
+                request["status"] = "новая (fallback)"
+                request["updated_at"] = datetime.now().isoformat()
+                await send_request_to_channel(request, context)
+                await safe_send_message(update, context,
+                    "✅ Заявка принята!\n"
+                    "Наш менеджер свяжется с вами в ближайшее время.\n"
+                    "Примечание: на сервере возникла ошибка, но мы уже получили вашу заявку.",
+                    reply_markup=main_menu()
+                )
+                # Уведомим админов о причине
+                for admin_id in ADMIN_IDS:
+                    try:
+                        await context.bot.send_message(admin_id, f"🚨 Fallback-заявка: серверная ошибка: {e}")
+                    except Exception:
+                        pass
+                del user_requests[user_id]
+            except Exception as inner_e:
+                print(f"Fallback error (general): {inner_e}")
+                await safe_send_message(update, context,
+                    "⚠️ Произошла ошибка при создании заявки.\n"
+                    "Пожалуйста, попробуйте позже или свяжитесь с поддержкой.",
+                    reply_markup=main_menu()
+                )
             print(f"Ошибка при создании заявки: {e}")
     
     elif action == "🔄 Изменить данные":

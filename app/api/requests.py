@@ -22,8 +22,10 @@ from app.schemas.requests import (
 from app.database.models import RequestStatus, User, WorkFormat, PreferredTime
 from app.config import settings
 import httpx
+import structlog
 
 router = APIRouter(prefix="/requests", tags=["requests"])
+logger = structlog.get_logger()
 
 
 @router.post("/", response_model=RequestResponse, status_code=status.HTTP_201_CREATED)
@@ -83,7 +85,12 @@ async def create_request(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Ошибка создания заявки")
+        # Логируем полную ошибку и возвращаем подробности
+        logger.error("create_request_failed", error=str(e), exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Ошибка создания заявки: {e}"
+        )
 
 
 async def _send_service_log(text: str) -> None:
