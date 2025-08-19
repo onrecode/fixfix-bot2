@@ -216,9 +216,35 @@ async def check_command_handler(update: Update, context: ContextTypes.DEFAULT_TY
 
     try:
         # Ожидаем, что API_BASE_URL указывает на корень API (в проде: http://app:8000/api/v1)
-        url = f"{API_BASE_URL}/requests/check"
+        url = f"{API_BASE_URL.rstrip('/')}/requests/check"
+        step_msgs = [
+            "1) Проверка прав: ✅",
+            f"2) Формирование URL: ✅ ({url})",
+        ]
         async with httpx.AsyncClient(timeout=20.0) as client:
-            resp = await client.post(url, params={"admin_id": user_id})
+            try:
+                resp = await client.post(url, params={"admin_id": user_id})
+            except httpx.ConnectError as ce:
+                step_msgs.append("3) Запрос к API: ❌ ConnectError (нет соединения)")
+                await safe_send_message(
+                    update,
+                    context,
+                    "\n".join([
+                        "❌ Проверка не выполнена",
+                        *step_msgs,
+                        "Возможные причины: API контейнер не поднят, сеть Docker, неверный API_BASE_URL",
+                    ])
+                )
+                return
+            except httpx.ReadTimeout:
+                step_msgs.append("3) Запрос к API: ❌ ReadTimeout (таймаут ожидания ответа)")
+                await safe_send_message(update, context, "\n".join(["❌ Проверка не выполнена", *step_msgs]))
+                return
+            except Exception as e:
+                step_msgs.append(f"3) Запрос к API: ❌ {type(e).__name__}: {e}")
+                await safe_send_message(update, context, "\n".join(["❌ Проверка не выполнена", *step_msgs]))
+                return
+
             if resp.status_code == 200:
                 data = resp.json()
                 await safe_send_message(
@@ -232,17 +258,22 @@ async def check_command_handler(update: Update, context: ContextTypes.DEFAULT_TY
                     )
                 )
             else:
+                # Подробности из ответа
+                detail = None
                 try:
                     detail = resp.json().get("detail")
                 except Exception:
                     detail = resp.text
-                await safe_send_message(
-                    update,
-                    context,
-                    f"❌ Ошибка проверки: {detail} (HTTP {resp.status_code})"
-                )
+                reason = getattr(resp, "reason_phrase", "")
+                body_preview = (detail or "").strip()
+                if len(body_preview) > 400:
+                    body_preview = body_preview[:400] + "…"
+                step_msgs.append(f"3) Запрос к API: ❌ HTTP {resp.status_code} {reason}")
+                if body_preview:
+                    step_msgs.append(f"Детали: {body_preview}")
+                await safe_send_message(update, context, "\n".join(["❌ Проверка не выполнена", *step_msgs]))
     except Exception as e:
-        await safe_send_message(update, context, f"❌ Ошибка запроса: {e}")
+        await safe_send_message(update, context, f"❌ Непредвиденная ошибка: {e}")
 
 # ==============================================================================
 # ОСНОВНЫЕ ОБРАБОТЧИКИ

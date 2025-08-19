@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.4
 # Многоэтапная сборка для оптимизации размера
 FROM python:3.11-slim AS builder
 
@@ -16,7 +17,9 @@ COPY requirements.txt .
 # Создаем виртуальное окружение и устанавливаем зависимости
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
-RUN pip install --no-cache-dir -r requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+    python -m pip install --upgrade pip && \
+    pip install -r requirements.txt
 
 # Финальный образ
 FROM python:3.11-slim
@@ -24,11 +27,9 @@ FROM python:3.11-slim
 # Устанавливаем рабочую директорию
 WORKDIR /app
 
-# Устанавливаем только необходимые системные зависимости
-RUN apt-get update && apt-get install -y \
-    postgresql-client \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean
+# Минимизируем зависимости финального образа
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
 # Копируем виртуальное окружение из builder
 COPY --from=builder /opt/venv /opt/venv
