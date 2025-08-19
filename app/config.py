@@ -18,7 +18,14 @@ class DatabaseSettings(BaseSettings):
     max_overflow: int = Field(default=20, env="DB_MAX_OVERFLOW")
 
     def __init__(self, **kwargs):
+        # Инициализируем из pydantic-settings (env, env_file)
         super().__init__(**kwargs)
+        # Форсируем чтение системных переменных окружения (на случай, если из .env пришли иные значения)
+        self.host = os.getenv("DB_HOST", self.host)
+        self.port = int(os.getenv("DB_PORT", self.port))
+        self.name = os.getenv("DB_NAME", self.name)
+        self.user = os.getenv("DB_USER", self.user)
+        self.password = os.getenv("DB_PASSWORD", self.password)
         print(f"DEBUG: DatabaseSettings initialized:")
         print(f"  host: {self.host}")
         print(f"  port: {self.port}")
