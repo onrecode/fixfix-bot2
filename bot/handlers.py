@@ -81,8 +81,29 @@ async def create_request_via_api(request_data: dict, user_id: int) -> dict:
             if response.status_code == 201:
                 return response.json()
             else:
-                error_detail = response.json().get("detail", "Неизвестная ошибка")
-                raise ValueError(f"Ошибка API: {error_detail}")
+                # Пытаемся красиво разобрать ошибку FastAPI (422 Unprocessable Entity)
+                try:
+                    payload = response.json()
+                except Exception:
+                    payload = {"detail": response.text}
+
+                detail = payload.get("detail", "Неизвестная ошибка")
+
+                # Если detail — это список ошибок валидации
+                if isinstance(detail, list):
+                    messages = []
+                    for err in detail:
+                        loc = err.get("loc", [])
+                        # Убираем префиксы уровня
+                        loc = [str(x) for x in loc if x not in ("body", "query", "path")]
+                        path = ".".join(loc) if loc else "field"
+                        msg = err.get("msg", "invalid")
+                        messages.append(f"{path}: {msg}")
+                    formatted = "\n".join(messages)
+                    raise ValueError(f"Ошибка API {response.status_code}:\n{formatted}")
+
+                # Иначе выводим как есть
+                raise ValueError(f"Ошибка API {response.status_code}: {detail}")
                 
     except Exception as e:
         print(f"Ошибка создания заявки через API: {e}")
