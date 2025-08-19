@@ -221,6 +221,22 @@ async def check_command_handler(update: Update, context: ContextTypes.DEFAULT_TY
             "1) Проверка прав: ✅",
             f"2) Формирование URL: ✅ ({url})",
         ]
+
+        # 2.1) Проверка доступности API по /health
+        try:
+            from urllib.parse import urlparse
+            parsed = urlparse(API_BASE_URL)
+            api_root = f"{parsed.scheme}://{parsed.netloc}"
+        except Exception:
+            api_root = "http://app:8000"
+
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            try:
+                health_resp = await client.get(f"{api_root}/health")
+                step_msgs.append(f"2.1) Health: HTTP {health_resp.status_code}")
+            except Exception as he:
+                step_msgs.append(f"2.1) Health: ❌ {type(he).__name__} ({he})")
+
         async with httpx.AsyncClient(timeout=20.0) as client:
             try:
                 resp = await client.post(url, params={"admin_id": user_id})

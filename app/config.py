@@ -5,6 +5,7 @@ import os
 from typing import List, Optional
 from pydantic_settings import BaseSettings
 from pydantic import Field
+from urllib.parse import urlsplit, urlunsplit
 
 
 class DatabaseSettings(BaseSettings):
@@ -26,18 +27,37 @@ class DatabaseSettings(BaseSettings):
         self.name = os.getenv("DB_NAME", self.name)
         self.user = os.getenv("DB_USER", self.user)
         self.password = os.getenv("DB_PASSWORD", self.password)
-        print(f"DEBUG: DatabaseSettings initialized:")
+        # Безопасное логирование без секретов
+        print("DEBUG: DatabaseSettings initialized:")
         print(f"  host: {self.host}")
         print(f"  port: {self.port}")
         print(f"  name: {self.name}")
         print(f"  user: {self.user}")
         print(f"  password: {'*' * len(self.password) if self.password else 'NOT_SET'}")
-        print(f"  URL: {self.url}")
+        print(f"  URL: {self._masked_url}")
 
     @property
     def url(self) -> str:
         """URL для подключения к базе данных"""
         return f"postgresql+asyncpg://{self.user}:{self.password}@{self.host}:{self.port}/{self.name}"
+
+    @property
+    def _masked_url(self) -> str:
+        """URL с маскировкой пароля для логов"""
+        try:
+            parts = urlsplit(self.url)
+            # parts.netloc может содержать user:pass@host:port
+            if "@" in parts.netloc:
+                creds, host = parts.netloc.split("@", 1)
+                if ":" in creds:
+                    user, _ = creds.split(":", 1)
+                    masked_netloc = f"{user}:****@{host}"
+                else:
+                    masked_netloc = f"{creds}@{host}"
+                return urlunsplit((parts.scheme, masked_netloc, parts.path, parts.query, parts.fragment))
+        except Exception:
+            pass
+        return self.url
 
 
 class TelegramSettings(BaseSettings):
@@ -51,11 +71,13 @@ class TelegramSettings(BaseSettings):
     
     def __init__(self, **kwargs):
         # Отладочная информация
-        print(f"DEBUG: TelegramSettings.__init__ called")
-        print(f"DEBUG: Environment variables:")
-        print(f"  TELEGRAM_TOKEN: {os.getenv('TELEGRAM_TOKEN', 'NOT_SET')}")
-        print(f"  REQUESTS_GROUP_ID: {os.getenv('REQUESTS_GROUP_ID', 'NOT_SET')}")
-        print(f"  ADMIN_IDS: {os.getenv('ADMIN_IDS', 'NOT_SET')}")
+        print("DEBUG: TelegramSettings.__init__ called")
+        print("DEBUG: Environment variables:")
+        token_set = bool(os.getenv("TELEGRAM_TOKEN"))
+        admins_set = bool(os.getenv("ADMIN_IDS"))
+        print(f"  TELEGRAM_TOKEN_SET: {token_set}")
+        print(f"  REQUESTS_GROUP_ID_SET: {os.getenv('REQUESTS_GROUP_ID') is not None}")
+        print(f"  ADMIN_IDS_SET: {admins_set}")
         
         # Передаем переменные окружения напрямую
         env_data = {
