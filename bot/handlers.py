@@ -203,6 +203,48 @@ async def get_chat_id_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     )
 
 # ==============================================================================
+# СЕРВИСНЫЕ КОМАНДЫ АДМИНА
+# ==============================================================================
+async def check_command_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Сервисная проверка /check: доступна только администраторам.
+    Вызывает API endpoint /requests/check, который создаёт тестовую заявку.
+    """
+    user_id = update.effective_user.id
+    if user_id not in ADMIN_IDS:
+        await safe_send_message(update, context, "❌ У вас нет прав для этой команды.")
+        return
+
+    try:
+        # Ожидаем, что API_BASE_URL указывает на корень API (в проде: http://app:8000/api/v1)
+        url = f"{API_BASE_URL}/requests/check"
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            resp = await client.post(url, params={"admin_id": user_id})
+            if resp.status_code == 200:
+                data = resp.json()
+                await safe_send_message(
+                    update,
+                    context,
+                    (
+                        "✅ Проверка выполнена успешно\n"
+                        f"ID: {data.get('request_id')}\n"
+                        f"Категория: {data.get('category')}\n"
+                        f"Услуга: {data.get('service')}"
+                    )
+                )
+            else:
+                try:
+                    detail = resp.json().get("detail")
+                except Exception:
+                    detail = resp.text
+                await safe_send_message(
+                    update,
+                    context,
+                    f"❌ Ошибка проверки: {detail} (HTTP {resp.status_code})"
+                )
+    except Exception as e:
+        await safe_send_message(update, context, f"❌ Ошибка запроса: {e}")
+
+# ==============================================================================
 # ОСНОВНЫЕ ОБРАБОТЧИКИ
 # ==============================================================================
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):

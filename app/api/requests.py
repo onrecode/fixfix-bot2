@@ -2,6 +2,8 @@
 API endpoints для работы с заявками
 """
 from typing import List, Optional
+import random
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -17,7 +19,9 @@ from app.schemas.requests import (
     RequestCommentCreate,
     RequestCommentResponse
 )
-from app.database.models import RequestStatus, User
+from app.database.models import RequestStatus, User, WorkFormat, PreferredTime
+from app.config import settings
+import httpx
 
 router = APIRouter(prefix="/requests", tags=["requests"])
 
@@ -80,6 +84,142 @@ async def create_request(
         raise
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Ошибка создания заявки")
+
+
+async def _send_service_log(text: str) -> None:
+    """Отправка сообщения в сервисный чат (Telegram)."""
+    try:
+        token = settings.telegram.token if settings.telegram else None
+        chat_id = settings.telegram.requests_group_id if settings.telegram else None
+        if not token or not chat_id:
+            return
+        api_url = f"https://api.telegram.org/bot{token}/sendMessage"
+        payload = {"chat_id": chat_id, "text": text}
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            await client.post(api_url, json=payload)
+    except Exception:
+        # Без падения API
+        pass
+
+
+@router.post("/check")
+async def check_flow(admin_id: int = Query(..., description="Telegram ID администратора"), db: AsyncSession = Depends(get_db)):
+    """Сервисная проверка формирования заявки. Доступно только админам.
+
+    Выбирает случайную категорию/услугу/формат/время, подставляет timestamp
+    в описание и адрес (если требуется), создаёт заявку и помечает её завершённой.
+    Отправляет лог в сервисный чат с деталями успеха/ошибки.
+    """
+    if not settings.telegram or admin_id not in (settings.telegram.admin_ids or []):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав")
+
+    step = "start"
+    try:
+        # Каталог (синхронизирован с ботом)
+        catalog = {
+            "🔴 Компьютер глючит/не работает": [
+                "💻 Тормозит/Не включается",
+                "🔧 Выскакивают ошибки",
+                "🦠 Вирусы и реклама",
+                "✍️ Свой вариант",
+            ],
+            "⚙️ Установить/Настроить программу": [
+                "📦 Установить программу",
+                "🌐 Настроить интернет",
+                "🖨️ Подключить устройства",
+                "✍️ Свой вариант",
+            ],
+            "📷 Подключить/Настроить устройство": [
+                "🖨️ Настроить принтер/сканер",
+                "🎮 Настроить приставку",
+                "🖱️ Настроить мышь/клавиатуру",
+                "📱 Подключить телефон",
+                "📺 Подключить телевизор",
+                "✍️ Свой вариант",
+            ],
+            "🚀 Хочу апгрейд": [
+                "💾 Увеличить оперативную память",
+                "🔧 Заменить процессор",
+                "💿 Установить SSD диск",
+                "🎮 Установить видеокарту",
+                "🖥️ Заменить блок питания",
+                "❄️ Улучшить охлаждение",
+                "🔧 Собрать ПК с нуля",
+                "💻 Подбор комплектующих",
+                "✍️ Свой вариант",
+            ],
+            "🌐 «Слабый Wi-Fi / новый роутер»": [
+                "📶 Настроить Wi-Fi роутер",
+                "🌐 Усилить сигнал",
+                "🔐 Установить пароль",
+                "📡 Новый роутер",
+                "📱 Подключить устройства",
+                "✍️ Свой вариант",
+            ],
+            "🔒 VPN и Защита данных": [
+                "🔐 Настроить VPN",
+                "🛡️ Проверка на вирусы",
+                "💾 Восстановление данных",
+                "🔒 Шифрование",
+                "🔑 Парольная защита",
+                "✍️ Свой вариант",
+            ],
+        }
+
+        step = "randomize"
+        timestamp = datetime.utcnow().isoformat()
+        category = random.choice(list(catalog.keys()))
+        service = random.choice(catalog[category])
+        work_format = random.choice(list(WorkFormat))
+        preferred_time = random.choice(list(PreferredTime))
+        description = f"auto-check {timestamp}"
+        address = f"auto-check address {timestamp}" if work_format in (WorkFormat.HOME_VISIT, WorkFormat.PICKUP) else None
+
+        step = "ensure_user"
+        result = await db.execute(select(User).where(User.telegram_id == admin_id))
+        db_user = result.scalar_one_or_none()
+        if db_user is None:
+            db_user = User(telegram_id=admin_id)
+            db.add(db_user)
+            await db.commit()
+            await db.refresh(db_user)
+
+        step = "create_request"
+        service_layer = RequestService(db)
+        payload = {
+            "category": category,
+            "service": service,
+            "description": description,
+            "work_format": work_format,
+            "address": address,
+            "preferred_time": preferred_time,
+        }
+        request = await service_layer.create_request(db_user.id, RequestCreate(**payload))
+
+        step = "complete_request"
+        await service_layer.update_request_status(
+            request.request_id,
+            RequestStatusUpdate(status=RequestStatus.COMPLETED, comment="auto-check"),
+            changed_by=db_user.id,
+        )
+
+        log_text = (
+            "✅ CHECK OK\n"
+            f"step: {step}\n"
+            f"request_id: {request.request_id}\n"
+            f"category: {category}\nservice: {service}\nformat: {work_format.value}\ntime: {preferred_time.value}"
+        )
+        await _send_service_log(log_text)
+        return {"ok": True, "request_id": request.request_id, "category": category, "service": service}
+
+    except Exception as e:
+        err_text = (
+            "❌ CHECK FAIL\n"
+            f"step: {step}\n"
+            f"error: {str(e)}"
+        )
+        await _send_service_log(err_text)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Ошибка на шаге {step}: {e}")
 
 
 @router.get("/{request_id}", response_model=RequestResponse)

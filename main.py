@@ -35,6 +35,7 @@ def main():
     application.add_handler(CommandHandler("testkeyboards", test_keyboards_handler))
     application.add_handler(CommandHandler("config", check_config_handler))
     application.add_handler(CommandHandler("debug", debug_state_handler))
+    application.add_handler(CommandHandler("check", check_command_handler))
     
     # Обработчики главного меню
     application.add_handler(MessageHandler(filters.Regex(r'^🔴 Компьютер глючит/не работает$'), category_handler))
