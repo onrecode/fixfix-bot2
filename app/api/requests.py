@@ -102,6 +102,45 @@ async def _send_service_log(text: str) -> None:
         pass
 
 
+async def _send_request_to_channel(request) -> None:
+    """Отправка созданной заявки в сервисный чат (основной канал заявок)."""
+    try:
+        token = settings.telegram.token if settings.telegram else None
+        chat_id = settings.telegram.requests_group_id if settings.telegram else None
+        if not token or not chat_id:
+            return
+        # Подготовим безопасный текст без Markdown спецсимволов
+        def esc(s: str | None) -> str:
+            if s is None:
+                return ""
+            for ch in ("_", "*", "[", "]", "(", ")", "~", "`", ">", "#", "+", "-", "=", "|", "{", "}", ".", "!"):
+                s = s.replace(ch, f"\\{ch}")
+            return s
+
+        text = (
+            f"🆕 *Новая заявка #{esc(request.request_id)}*\n\n"
+            f"📝 *Категория:* {esc(request.category)}\n"
+            f"🔧 *Услуга:* {esc(request.service or 'Не указано')}\n"
+            f"📄 *Описание:* {esc(request.description or 'Не указано')}\n\n"
+            f"📍 *Детали:*\n"
+            f"• Формат: {esc(getattr(request.work_format, 'value', str(request.work_format)))}\n"
+            f"• Адрес: {esc(request.address or 'Не требуется')}\n"
+            f"• Время: {esc(getattr(request.preferred_time, 'value', str(request.preferred_time)))}\n"
+        )
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            await client.post(
+                f"https://api.telegram.org/bot{token}/sendMessage",
+                json={
+                    "chat_id": chat_id,
+                    "text": text,
+                    "parse_mode": "Markdown",
+                },
+            )
+    except Exception:
+        # Не роняем API
+        pass
+
+
 @router.post("/check")
 async def check_flow(admin_id: int = Query(..., description="Telegram ID администратора"), db: AsyncSession = Depends(get_db)):
     """Сервисная проверка формирования заявки. Доступно только админам.
@@ -202,6 +241,9 @@ async def check_flow(admin_id: int = Query(..., description="Telegram ID адм�
             RequestStatusUpdate(status=RequestStatus.COMPLETED, comment="auto-check"),
             changed_by=db_user.id,
         )
+
+        # Отправим созданную заявку в канал
+        await _send_request_to_channel(request)
 
         log_text = (
             "✅ CHECK OK\n"
