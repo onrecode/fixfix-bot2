@@ -5,6 +5,7 @@ import asyncio
 from typing import AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.pool import NullPool
+from sqlalchemy import text
 from app.config import settings
 
 # Создаем асинхронный движок
@@ -51,9 +52,9 @@ async def check_db_connection() -> bool:
     """Проверка подключения к базе данных"""
     try:
         print(f"DEBUG: Проверка подключения к БД: {settings.database.url}")
-        async with engine.begin() as conn:
-            result = await conn.execute("SELECT 1")
-            print(f"DEBUG: Результат запроса: {result}")
+        async with engine.connect() as conn:
+            result = await conn.execute(text("SELECT 1"))
+            _ = result.scalar()  # Должно быть 1
         print("DEBUG: Подключение к БД успешно!")
         return True
     except Exception as e:
