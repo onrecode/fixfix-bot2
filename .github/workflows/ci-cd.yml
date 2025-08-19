@@ -137,7 +137,7 @@ jobs:
                   - fixfix_network
                 restart: unless-stopped
             
-              # Основное приложение (API + Bot)
+              # Основное приложение (API)
               app:
                 image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
                 container_name: fixfix_app
@@ -147,9 +147,6 @@ jobs:
                   - DB_NAME=${DB_NAME:-fixfix_bot}
                   - DB_USER=${DB_USER:-postgres}
                   - DB_PASSWORD=${DB_PASSWORD:-password}
-                  - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
-                  - REQUESTS_GROUP_ID=${REQUESTS_GROUP_ID:-1004796553922}
-                  - ADMIN_IDS=${ADMIN_IDS:-}
                   - DEBUG=${DEBUG:-false}
                 ports:
                   - "8000:8000"
@@ -160,6 +157,25 @@ jobs:
                 volumes:
                   - ./logs:/app/logs
                 restart: unless-stopped
+                command: ["python", "-m", "app.main"]
+
+              # Telegram Bot (отдельный сервис)
+              bot:
+                image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+                container_name: fixfix_bot
+                environment:
+                  - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
+                  - REQUESTS_GROUP_ID=${REQUESTS_GROUP_ID:-1004796553922}
+                  - ADMIN_IDS=${ADMIN_IDS:-}
+                  - API_BASE_URL=http://app:8000/api/v1
+                depends_on:
+                  - app
+                networks:
+                  - fixfix_network
+                volumes:
+                  - ./logs:/app/logs
+                restart: unless-stopped
+                command: ["python", "main.py"]
             
             volumes:
               postgres_data:
@@ -169,14 +185,20 @@ jobs:
                 driver: bridge
             COMPOSE_EOF
             
-            # Pull latest image
-            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-            
-            # Stop and remove old containers
-            docker-compose down || true
-            
-            # Start services with new image
-            docker-compose up -d
+            # Pull latest image explicitly (для кеша)
+            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest || true
+
+            # Останавливаем и удаляем старые контейнеры (включая осиротевшие)
+            docker-compose down --remove-orphans || true
+
+            # На всякий случай чистим контейнеры с префиксом fixfix_, если остались
+            docker ps -aq --filter "name=fixfix_" | xargs -r docker rm -f || true
+
+            # Тянем свежие образы, чтобы гарантировать обновление
+            docker-compose pull || true
+
+            # Запускаем с принудительным пересозданием и удалением осиротевших
+            docker-compose up -d --force-recreate --remove-orphans
             
             echo "✅ Deployment completed successfully!"
             
@@ -190,6 +212,9 @@ jobs:
             
             echo "=== App logs ==="
             docker logs fixfix_app --tail=20 || echo "App container not found"
+            
+            echo "=== Bot logs ==="
+            docker logs fixfix_bot --tail=20 || echo "Bot container not found"
             
             echo "=== Docker Compose status ==="
             docker-compose ps
