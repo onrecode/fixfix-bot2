@@ -73,7 +73,7 @@ async def create_request_via_api(request_data: dict, user_id: int) -> dict:
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"{API_BASE_URL}/requests/",
-                params={"user_id": user_id},
+                params={"telegram_id": user_id},
                 json=api_request,
                 timeout=30.0
             )
