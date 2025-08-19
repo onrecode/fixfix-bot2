@@ -147,6 +147,9 @@ jobs:
                   - DB_NAME=${DB_NAME:-fixfix_bot}
                   - DB_USER=${DB_USER:-postgres}
                   - DB_PASSWORD=${DB_PASSWORD:-password}
+                  - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
+                  - REQUESTS_GROUP_ID=${REQUESTS_GROUP_ID:-1004796553922}
+                  - ADMIN_IDS=${ADMIN_IDS:-}
                   - DEBUG=${DEBUG:-false}
                 ports:
                   - "8000:8000"
