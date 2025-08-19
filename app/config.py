@@ -83,10 +83,12 @@ class MonitoringSettings(BaseSettings):
 
 class Settings(BaseSettings):
     """Основные настройки приложения"""
-    database: DatabaseSettings = DatabaseSettings()
+    # Важно инициализировать вложенные настройки через default_factory,
+    # чтобы они читали актуальные переменные окружения при создании Settings
+    database: DatabaseSettings = Field(default_factory=DatabaseSettings)
     telegram: Optional[TelegramSettings] = None
-    api: APISettings = APISettings()
-    monitoring: MonitoringSettings = MonitoringSettings()
+    api: APISettings = Field(default_factory=APISettings)
+    monitoring: MonitoringSettings = Field(default_factory=MonitoringSettings)
     
     # Лимиты и ограничения
     max_requests_per_user: int = Field(default=5, env="MAX_REQUESTS_PER_USER")
