@@ -281,6 +281,16 @@ async def description_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     print(f"DEBUG: description_handler вызван для пользователя {user_id} с описанием: {description}")
     
     if user_id in user_requests:
+        # Ранняя валидация длины описания
+        if len(description.strip()) < 10:
+            await safe_send_message(
+                update,
+                context,
+                "❌ Описание должно содержать минимум 10 символов.\n"
+                "Пожалуйста, введите более подробное описание проблемы:",
+                reply_markup=back_menu()
+            )
+            return
         user_requests[user_id]["description"] = description
         await safe_send_message(update, context, "📍 Как вам удобнее получить помощь?", reply_markup=work_format_menu())
 
@@ -381,9 +391,12 @@ async def confirm_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Проверяем минимальную длину описания
         if 'description' not in request or len(request.get('description', '').strip()) < 10:
+            # Очистим некорректное описание, чтобы следующий ввод текста попал в обработчик описания
+            if 'description' in request:
+                del request['description']
             await safe_send_message(update, context,
                 "❌ Описание должно содержать минимум 10 символов.\n"
-                "Пожалуйста, добавьте более подробное описание проблемы.",
+                "Пожалуйста, введите более подробное описание проблемы:",
                 reply_markup=back_menu()
             )
             return
