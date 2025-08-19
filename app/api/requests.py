@@ -4,6 +4,7 @@ API endpoints для работы с заявками
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 from app.database.connection import get_db
 from app.services.request_service import RequestService
@@ -16,7 +17,7 @@ from app.schemas.requests import (
     RequestCommentCreate,
     RequestCommentResponse
 )
-from app.database.models import RequestStatus
+from app.database.models import RequestStatus, User
 
 router = APIRouter(prefix="/requests", tags=["requests"])
 
@@ -24,16 +25,59 @@ router = APIRouter(prefix="/requests", tags=["requests"])
 @router.post("/", response_model=RequestResponse, status_code=status.HTTP_201_CREATED)
 async def create_request(
     request_data: RequestCreate,
-    user_id: int = Query(..., description="ID пользователя"),
+    user_id: Optional[int] = Query(None, description="ID пользователя в БД (или telegram_id для обратной совместимости)"),
+    telegram_id: Optional[int] = Query(None, description="Telegram ID пользователя"),
     db: AsyncSession = Depends(get_db)
 ):
-    """Создание новой заявки"""
+    """Создание новой заявки.
+
+    Логика разрешения пользователя:
+    - Если передан telegram_id: находим/создаём пользователя по telegram_id
+    - Иначе если передан user_id:
+        - пытаемся найти пользователя по внутреннему user_id
+        - если не найден, пробуем трактовать user_id как telegram_id (для обратной совместимости)
+        - если не найден и это telegram_id: создаём пользователя
+    """
     try:
+        # Определяем/создаём пользователя
+        resolved_user: Optional[User] = None
+
+        if telegram_id is not None:
+            result = await db.execute(select(User).where(User.telegram_id == telegram_id))
+            resolved_user = result.scalar_one_or_none()
+            if resolved_user is None:
+                # Создаём минимального пользователя
+                new_user = User(telegram_id=telegram_id)
+                db.add(new_user)
+                await db.commit()
+                await db.refresh(new_user)
+                resolved_user = new_user
+        elif user_id is not None:
+            # Сначала пробуем как внутренний ID
+            result = await db.execute(select(User).where(User.id == user_id))
+            resolved_user = result.scalar_one_or_none()
+            if resolved_user is None:
+                # Пробуем трактовать как telegram_id (обратная совместимость со старым ботом)
+                result = await db.execute(select(User).where(User.telegram_id == user_id))
+                resolved_user = result.scalar_one_or_none()
+                if resolved_user is None:
+                    # Создаём пользователя, считая, что нам передали telegram_id в user_id
+                    new_user = User(telegram_id=user_id)
+                    db.add(new_user)
+                    await db.commit()
+                    await db.refresh(new_user)
+                    resolved_user = new_user
+
+        if resolved_user is None:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Не удалось определить пользователя")
+
         service = RequestService(db)
-        request = await service.create_request(user_id, request_data)
+        request = await service.create_request(resolved_user.id, request_data)
         return request
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Ошибка создания заявки")
 
